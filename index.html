@@ -238,6 +238,8 @@
       .page-head .primary { padding: 9px; }
     }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
   <div class="app">
@@ -335,7 +337,7 @@
           <section class="card report-card">
             <h2>Monthly combined report</h2>
             <p>Export sales transactions and repair tickets as a CSV file that opens in spreadsheet software. Only records saved in this browser are included.</p>
-            <div class="report-options"><div class="form-field"><label for="report-month">Month</label><input id="report-month" type="month"></div><button class="primary" id="download-report" type="button">Download CSV report</button></div>
+            <div class="report-options"><div class="form-field"><label for="report-month">Month</label><input id="report-month" type="month"></div><button class="primary" id="download-report" type="button">Download CSV report</button><button class="primary" id="download-pdf" type="button">&#11015; Download PDF</button></div>
           </section>
           <div class="notice" style="max-width:680px;margin-top:12px">The current prototype stores data on this device only. This report is not a cloud backup or accounting record.</div>
         </section>
@@ -1002,6 +1004,246 @@
       const text = String(value ?? "");
       return `"${text.replace(/"/g, '""')}"`;
     }
+
+    function generatePDF() {
+  const month = document.querySelector('#report-month').value;
+  if (!month) {
+    notify('Choose a month before downloading the PDF report.');
+    return;
+  }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+  // Colour palette
+  const NAVY   = [23, 37, 59];   // #17253b
+  const ORANGE = [233, 154, 73]; // #e99a49
+  const WHITE  = [255, 255, 255];
+  const STRIPE = [245, 247, 250]; // #f5f7fa
+  const AMBER  = [255, 243, 229]; // #fff3e5
+
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 15;
+
+  // --- Filter data ---
+  const sales   = state.sales.filter(s => s.createdAt.startsWith(month));
+  const repairs = state.repairs.filter(r => r.createdAt.startsWith(month));
+
+  // Parse month label, e.g. "2026-11" -> "November 2026"
+  const [yr, mo] = month.split('-');
+  const monthLabel = new Date(Number(yr), Number(mo) - 1, 1)
+    .toLocaleDateString('en-KE', { month: 'long', year: 'numeric' });
+
+  // Page number footer helper
+  function addPageNumbers() {
+    const totalPages = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(...NAVY);
+      doc.text(
+        `Page ${i} of ${totalPages}`,
+        pageW / 2,
+        pageH - 8,
+        { align: 'center' }
+      );
+    }
+  }
+
+  // --- Page header ---
+  doc.setFillColor(...NAVY);
+  doc.rect(0, 0, pageW, 28, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor(...WHITE);
+  doc.text('Naxcom Mobiles', margin, 12);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.text(`Monthly Operations Report — ${monthLabel}`, margin, 20);
+  doc.setFontSize(8);
+  doc.setTextColor(180, 190, 200);
+  doc.text(
+    `Generated: ${new Date().toLocaleString('en-KE')}`,
+    pageW - margin,
+    24,
+    { align: 'right' }
+  );
+
+  // Horizontal rule
+  doc.setDrawColor(...ORANGE);
+  doc.setLineWidth(0.6);
+  doc.line(margin, 30, pageW - margin, 30);
+
+  let y = 36;
+
+  // Helper: section heading
+  function sectionHeading(title) {
+    if (y > pageH - 40) { doc.addPage(); y = 20; }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(...ORANGE);
+    doc.text(title, margin, y);
+    y += 6;
+  }
+
+  // Helper: autoTable wrapper that tracks cursor
+  function autoTable(options) {
+    if (y > pageH - 40) { doc.addPage(); y = 20; }
+    doc.autoTable({
+      startY: y,
+      margin: { left: margin, right: margin },
+      theme: 'grid',
+      headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 8 },
+      alternateRowStyles: { fillColor: STRIPE },
+      bodyStyles: { fontSize: 8, textColor: NAVY },
+      ...options
+    });
+    y = doc.lastAutoTable.finalY + 8;
+  }
+
+  // =====================
+  // Section 1: Sales Summary
+  // =====================
+  sectionHeading('1. Sales Summary');
+
+  const totalRevenue  = sales.reduce((s, x) => s + (x.total || 0), 0);
+  const retailRev     = sales.filter(s => s.tier === 'retail').reduce((s, x) => s + (x.total || 0), 0);
+  const wholesaleRev  = sales.filter(s => s.tier === 'wholesale').reduce((s, x) => s + (x.total || 0), 0);
+  const totalTax      = sales.reduce((s, x) => s + (x.tax || 0), 0);
+  const avgSale       = sales.length ? (totalRevenue / sales.length) : 0;
+
+  autoTable({
+    head: [['Metric', 'Value']],
+    body: [
+      ['Total Sales (count)',              String(sales.length)],
+      ['Total Revenue (KSh)',              totalRevenue.toLocaleString('en-KE', { maximumFractionDigits: 2 })],
+      ['Retail Sales Revenue (KSh)',       retailRev.toLocaleString('en-KE', { maximumFractionDigits: 2 })],
+      ['Wholesale Sales Revenue (KSh)',    wholesaleRev.toLocaleString('en-KE', { maximumFractionDigits: 2 })],
+      ['Total Tax Collected (KSh)',        totalTax.toLocaleString('en-KE', { maximumFractionDigits: 2 })],
+      ['Average Sale Value (KSh)',         avgSale.toLocaleString('en-KE', { maximumFractionDigits: 2 })],
+    ],
+    columnStyles: { 0: { cellWidth: 90 }, 1: { halign: 'right' } }
+  });
+
+  // =====================
+  // Section 2: Sales Detail Table
+  // =====================
+  sectionHeading('2. Sales Detail');
+
+  const salesBody = sales.map(s => [
+    s.id,
+    new Date(s.createdAt).toLocaleString('en-KE', { dateStyle: 'short', timeStyle: 'short' }),
+    s.items.reduce((n, i) => n + i.quantity, 0),
+    s.tier ? (s.tier.charAt(0).toUpperCase() + s.tier.slice(1)) : '',
+    s.payment || '',
+    (s.total || 0).toLocaleString('en-KE', { maximumFractionDigits: 2 })
+  ]);
+
+  const subtotalRow = [
+    { content: 'Subtotal', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
+    { content: totalRevenue.toLocaleString('en-KE', { maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
+  ];
+
+  autoTable({
+    head: [['Receipt', 'Date & Time', 'Items', 'Tier', 'Payment', 'Amount (KSh)']],
+    body: sales.length ? [...salesBody, subtotalRow] : [['No sales recorded for this month', '', '', '', '', '']],
+    columnStyles: { 5: { halign: 'right' } }
+  });
+
+  // =====================
+  // Section 3: Repair Tickets Summary
+  // =====================
+  sectionHeading('3. Repair Tickets Summary');
+
+  const waiting   = repairs.filter(r => r.status === 'Waiting').length;
+  const inProg    = repairs.filter(r => r.status === 'In progress').length;
+  const ready     = repairs.filter(r => r.status === 'Ready for pickup').length;
+
+  autoTable({
+    head: [['Metric', 'Count']],
+    body: [
+      ['Total tickets created this month', String(repairs.length)],
+      ['Waiting',                          String(waiting)],
+      ['In Progress',                      String(inProg)],
+      ['Ready for Pickup',                 String(ready)],
+    ],
+    columnStyles: { 0: { cellWidth: 90 }, 1: { halign: 'right' } }
+  });
+
+  // =====================
+  // Section 4: Repair Tickets Detail
+  // =====================
+  sectionHeading('4. Repair Tickets Detail');
+
+  autoTable({
+    head: [['Ticket', 'Device', 'Customer', 'Phone', 'Issue', 'Status', 'Date']],
+    body: repairs.length
+      ? repairs.map(r => [
+          r.id,
+          r.device,
+          r.customer,
+          r.phone || '',
+          r.issue,
+          r.status,
+          new Date(r.createdAt).toLocaleDateString('en-KE')
+        ])
+      : [['No repair tickets for this month', '', '', '', '', '', '']]
+  });
+
+  // =====================
+  // Section 5: Inventory Snapshot
+  // =====================
+  sectionHeading('5. Inventory Snapshot (at time of report)');
+
+  const invBody = state.products.map(p => {
+    const isLow = p.stock <= p.reorder;
+    return {
+      row: [
+        p.name,
+        p.sku,
+        p.category,
+        (p.retail || 0).toLocaleString('en-KE'),
+        (p.wholesale || 0).toLocaleString('en-KE'),
+        String(p.stock),
+        String(p.reorder)
+      ],
+      isLow
+    };
+  });
+
+  if (y > pageH - 40) { doc.addPage(); y = 20; }
+  doc.autoTable({
+    startY: y,
+    margin: { left: margin, right: margin },
+    theme: 'grid',
+    headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 8 },
+    alternateRowStyles: { fillColor: STRIPE },
+    bodyStyles: { fontSize: 8, textColor: NAVY },
+    head: [['Product', 'SKU', 'Category', 'Retail (KSh)', 'Wholesale (KSh)', 'In Stock', 'Reorder At']],
+    body: invBody.map(item => item.row),
+    didParseCell: function(data) {
+      if (data.section === 'body') {
+        const item = invBody[data.row.index];
+        if (item && item.isLow) {
+          data.cell.styles.fillColor = AMBER;
+        }
+      }
+    },
+    columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' } }
+  });
+  y = doc.lastAutoTable.finalY + 8;
+
+  // Add page numbers to all pages
+  addPageNumbers();
+
+  // Save
+  doc.save(`naxcom-report-${month}.pdf`);
+  notify(`PDF report downloaded for ${monthLabel}.`);
+}
+
+    document.querySelector('#download-pdf').addEventListener('click', generatePDF);
 
     document.querySelector("#download-report").addEventListener("click", () => {
       const month = document.querySelector("#report-month").value;
