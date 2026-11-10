@@ -167,6 +167,40 @@
     .modal-form .form-field.full { grid-column: 1 / -1; }
     .modal-form .form-field input, .modal-form .form-field select { width: 100%; }
     .modal-form .primary { grid-column: 1 / -1; margin-top: 5px; }
+    .btn-edit {
+      background: var(--blue-pale);
+      color: var(--nav);
+      border: 1px solid #c5d3e8;
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-size: 0.78rem;
+      cursor: pointer;
+      margin-left: 4px;
+    }
+    .btn-edit:hover { background: #dce7f7; }
+    .btn-delete {
+      background: #fff0f0;
+      color: #b91c1c;
+      border: 1px solid #fca5a5;
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-size: 0.78rem;
+      cursor: pointer;
+      margin-left: 4px;
+    }
+    .btn-delete:hover { background: #fee2e2; }
+    .btn-void {
+      background: #fff0f0;
+      color: #b91c1c;
+      border: 1px solid #fca5a5;
+      border-radius: 6px;
+      padding: 2px 7px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      margin-left: 4px;
+    }
+    .btn-void:hover { background: #fee2e2; }
+    .pill-blue { background: #edf2fb; color: #2355a0; }
     .mobile-nav { display: none; }
     @media (max-width: 900px) {
       .app { grid-template-columns: 190px minmax(0, 1fr); }
@@ -228,7 +262,7 @@
       </header>
       <main>
         <section class="page active" id="page-dashboard">
-          <div class="page-head"><div><div class="eyebrow">Daily snapshot · Naxcom Mobiles</div><h1>Good morning, Naxcom</h1><p class="subtitle">A clear view of sales, stock, and repairs at your counter.</p></div><button class="primary accent" data-go="checkout" type="button">＋ &nbsp; Start a sale</button></div>
+          <div class="page-head"><div><div class="eyebrow">Daily snapshot · Naxcom Mobiles</div><h1 id="greeting-heading">Good morning, Naxcom</h1><p class="subtitle">A clear view of sales, stock, and repairs at your counter.</p></div><button class="primary accent" data-go="checkout" type="button">＋ &nbsp; Start a sale</button></div>
           <div class="metric-grid">
             <article class="metric"><div class="metric-top">Sales today<span class="metric-icon">KSh</span></div><strong id="metric-sales">KSh 0</strong><div class="metric-note">Completed transactions</div></article>
             <article class="metric"><div class="metric-top">Items sold<span class="metric-icon">↗</span></div><strong id="metric-items">0</strong><div class="metric-note">Units across all sales</div></article>
@@ -236,11 +270,14 @@
             <article class="metric"><div class="metric-top">Low stock<span class="metric-icon">!</span></div><strong id="metric-stock">0</strong><div class="metric-note">At or below reorder point</div></article>
             <article class="metric"><div class="metric-top">Units in stock<span class="metric-icon">▤</span></div><strong id="metric-units">0</strong><div class="metric-note">Total sellable items</div></article>
             <article class="metric"><div class="metric-top">Stock retail value<span class="metric-icon">KSh</span></div><strong id="metric-inventory-value">KSh 0</strong><div class="metric-note">Estimated value at retail prices</div></article>
+            <article class="metric"><div class="metric-top">Retail sales today<span class="metric-icon">KSh</span></div><strong id="metric-retail">KSh 0</strong><div class="metric-note">Sales via retail tier</div></article>
+            <article class="metric"><div class="metric-top">Wholesale sales today<span class="metric-icon">KSh</span></div><strong id="metric-wholesale">KSh 0</strong><div class="metric-note">Sales via wholesale tier</div></article>
           </div>
           <div class="dashboard-grid">
             <section class="card">
               <div class="card-head"><h2>Recent sales</h2><span id="sales-caption">Today</span></div>
-              <div class="table-wrap"><table><thead><tr><th>Receipt</th><th>Time</th><th>Items</th><th>Payment</th><th>Total</th></tr></thead><tbody id="sales-table"></tbody></table></div>
+              <div class="table-wrap"><table><thead><tr><th>Receipt</th><th>Time</th><th>Items</th><th>Payment</th><th>Tier</th><th>Total</th><th></th></tr></thead><tbody id="sales-table"></tbody></table></div>
+              <div style="padding: 10px 16px; border-top: 1px solid #eff1f4;"><button class="text-button" id="toggle-all-sales" type="button">View all sales →</button></div>
             </section>
             <section class="card quick-card">
               <h2>Shortcuts</h2>
@@ -284,7 +321,7 @@
             <article class="inventory-total"><span>Estimated stock value at retail</span><strong id="inventory-total-value">KSh 0</strong><small>Quantity in stock × listed retail price</small></article>
           </div>
           <div class="toolbar"><input id="inventory-search" type="search" placeholder="Search name, SKU, or category..." aria-label="Search inventory"><select id="inventory-category" aria-label="Filter inventory by category"><option value="">All categories</option></select><select id="stock-filter" aria-label="Filter inventory by stock"><option value="">All stock levels</option><option value="low">Low stock only</option></select></div>
-          <section class="card inventory-table"><div class="table-wrap"><table><thead><tr><th>Product</th><th>SKU</th><th>Category</th><th>Retail</th><th>Wholesale</th><th>In stock</th><th>Reorder at</th></tr></thead><tbody id="inventory-table"></tbody></table></div></section>
+          <section class="card inventory-table"><div class="table-wrap"><table><thead><tr><th>Product</th><th>SKU</th><th>Category</th><th>Retail</th><th>Wholesale</th><th>In stock</th><th>Reorder at</th><th>Actions</th></tr></thead><tbody id="inventory-table"></tbody></table></div></section>
         </section>
 
         <section class="page" id="page-repairs">
@@ -410,6 +447,8 @@
       if (categories().includes(selected)) select.value = selected;
     }
 
+    let showAllSales = false;
+
     function renderDashboard() {
       const today = new Date().toDateString();
       const salesToday = state.sales.filter((sale) => new Date(sale.createdAt).toDateString() === today);
@@ -426,20 +465,61 @@
       document.querySelector("#metric-inventory-value").textContent = money(inventory.retailValue);
       document.querySelector("#repair-count").textContent = openRepairs;
 
+      const retailTotal = salesToday.filter((s) => s.tier === 'retail').reduce((sum, s) => sum + s.total, 0);
+      const wholesaleTotal = salesToday.filter((s) => s.tier === 'wholesale').reduce((sum, s) => sum + s.total, 0);
+      document.querySelector("#metric-retail").textContent = money(retailTotal);
+      document.querySelector("#metric-wholesale").textContent = money(wholesaleTotal);
+
       const salesTable = document.querySelector("#sales-table");
       salesTable.replaceChildren();
-      const recentSales = [...state.sales].reverse().slice(0, 5);
-      if (!recentSales.length) {
-        salesTable.innerHTML = '<tr class="empty-row"><td colspan="5">No completed sales yet. Start a checkout to record the first one.</td></tr>';
+      const allSalesReversed = [...state.sales].reverse();
+      const displaySales = showAllSales ? allSalesReversed : allSalesReversed.slice(0, 5);
+      const toggleBtn = document.querySelector("#toggle-all-sales");
+      if (toggleBtn) toggleBtn.textContent = showAllSales ? "Show less ←" : "View all sales →";
+      if (!displaySales.length) {
+        salesTable.innerHTML = '<tr class="empty-row"><td colspan="7">No completed sales yet. Start a checkout to record the first one.</td></tr>';
       } else {
-        recentSales.forEach((sale) => {
+        displaySales.forEach((sale) => {
           const row = document.createElement("tr");
           const time = new Date(sale.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-          [sale.id, time, sale.items.reduce((sum, item) => sum + item.quantity, 0), sale.payment, money(sale.total)].forEach((value) => {
+          [sale.id, time, sale.items.reduce((sum, item) => sum + item.quantity, 0), sale.payment].forEach((value) => {
             const cell = document.createElement("td");
             cell.textContent = value;
             row.append(cell);
           });
+          const tierCell = document.createElement("td");
+          const tierPill = document.createElement("span");
+          if (sale.tier === 'wholesale') {
+            tierPill.className = "pill pill-blue";
+            tierPill.textContent = "Wholesale";
+          } else {
+            tierPill.className = "pill";
+            tierPill.textContent = "Retail";
+          }
+          tierCell.append(tierPill);
+          row.append(tierCell);
+          const totalCell = document.createElement("td");
+          totalCell.textContent = money(sale.total);
+          row.append(totalCell);
+          const actionCell = document.createElement("td");
+          const voidBtn = document.createElement("button");
+          voidBtn.type = "button";
+          voidBtn.className = "btn-void";
+          voidBtn.textContent = "🚫 Void";
+          voidBtn.addEventListener("click", () => {
+            if (!confirm(`Void sale ${sale.id}? Stock will be restored.`)) return;
+            sale.items.forEach((item) => {
+              const product = state.products.find((p) => p.id === item.productId);
+              if (product) product.stock += item.quantity;
+            });
+            const idx = state.sales.findIndex((s) => s.id === sale.id);
+            if (idx !== -1) state.sales.splice(idx, 1);
+            persist();
+            renderDashboard();
+            notify("Sale voided and stock restored");
+          });
+          actionCell.append(voidBtn);
+          row.append(actionCell);
           salesTable.append(row);
         });
       }
@@ -479,7 +559,7 @@
       const table = document.querySelector("#inventory-table");
       table.replaceChildren();
       if (!products.length) {
-        table.innerHTML = '<tr class="empty-row"><td colspan="7">No products match these filters.</td></tr>';
+        table.innerHTML = '<tr class="empty-row"><td colspan="8">No products match these filters.</td></tr>';
         return;
       }
       products.forEach((product) => {
@@ -507,6 +587,59 @@
         const reorder = document.createElement("td");
         reorder.textContent = product.reorder;
         row.append(reorder);
+        const actionsCell = document.createElement("td");
+        const editBtn = document.createElement("button");
+        editBtn.type = "button";
+        editBtn.className = "btn-edit";
+        editBtn.textContent = "✏️ Edit";
+        editBtn.addEventListener("click", () => {
+          openModal("Edit product", [
+            { label: "Product name", name: "name", placeholder: "e.g. USB-C charger", full: true },
+            { label: "SKU", name: "sku", placeholder: "e.g. CH-205" },
+            { label: "Category", name: "category", placeholder: "e.g. Chargers" },
+            { label: "Retail price (KSh)", name: "retail", type: "number", min: 0, step: "1" },
+            { label: "Wholesale price (KSh)", name: "wholesale", type: "number", min: 0, step: "1" },
+            { label: "Starting stock", name: "stock", type: "number", min: 0, step: "1" },
+            { label: "Reorder point", name: "reorder", type: "number", min: 0, step: "1" }
+          ], (values) => {
+            const p = state.products.find((x) => x.id === product.id);
+            if (!p) return false;
+            p.name = values.name.trim();
+            p.sku = values.sku.trim().toUpperCase();
+            p.category = values.category.trim();
+            p.retail = Number(values.retail);
+            p.wholesale = Number(values.wholesale);
+            p.stock = Number(values.stock);
+            p.reorder = Number(values.reorder);
+            persist();
+            renderInventory();
+            renderDashboard();
+            notify("Product updated");
+            return true;
+          }, "Save changes");
+          document.querySelector('#modal-form [name="name"]').value = product.name;
+          document.querySelector('#modal-form [name="sku"]').value = product.sku;
+          document.querySelector('#modal-form [name="category"]').value = product.category;
+          document.querySelector('#modal-form [name="retail"]').value = product.retail;
+          document.querySelector('#modal-form [name="wholesale"]').value = product.wholesale;
+          document.querySelector('#modal-form [name="stock"]').value = product.stock;
+          document.querySelector('#modal-form [name="reorder"]').value = product.reorder;
+        });
+        const deleteBtn = document.createElement("button");
+        deleteBtn.type = "button";
+        deleteBtn.className = "btn-delete";
+        deleteBtn.textContent = "🗑️ Delete";
+        deleteBtn.addEventListener("click", () => {
+          if (!confirm(`Delete ${product.name}? This cannot be undone.`)) return;
+          const idx = state.products.findIndex((x) => x.id === product.id);
+          if (idx !== -1) state.products.splice(idx, 1);
+          persist();
+          renderInventory();
+          renderDashboard();
+          notify("Product deleted");
+        });
+        actionsCell.append(editBtn, deleteBtn);
+        row.append(actionsCell);
         table.append(row);
       });
     }
@@ -672,6 +805,51 @@
           }
         });
         footer.append(status, advance);
+        const editRepairBtn = document.createElement("button");
+        editRepairBtn.type = "button";
+        editRepairBtn.className = "btn-edit";
+        editRepairBtn.textContent = "✏️ Edit";
+        editRepairBtn.addEventListener("click", () => {
+          openModal("Edit repair ticket", [
+            { label: "Device", name: "device", placeholder: "e.g. Samsung Galaxy A54", full: true },
+            { label: "Customer name", name: "customer", placeholder: "Customer name" },
+            { label: "Phone number", name: "phone", placeholder: "Contact number" },
+            { label: "Issue reported", name: "issue", placeholder: "e.g. Screen cracked", full: true },
+            { label: "Status", name: "status", values: ["Waiting", "In progress", "Ready for pickup"], full: true }
+          ], (values) => {
+            const r = state.repairs.find((x) => x.id === repair.id);
+            if (!r) return false;
+            r.device = values.device.trim();
+            r.customer = values.customer.trim();
+            r.phone = values.phone.trim();
+            r.issue = values.issue.trim();
+            r.status = values.status;
+            persist();
+            renderRepairs();
+            renderDashboard();
+            notify("Repair ticket updated");
+            return true;
+          }, "Save changes");
+          document.querySelector('#modal-form [name="device"]').value = repair.device;
+          document.querySelector('#modal-form [name="customer"]').value = repair.customer;
+          document.querySelector('#modal-form [name="phone"]').value = repair.phone;
+          document.querySelector('#modal-form [name="issue"]').value = repair.issue;
+          document.querySelector('#modal-form [name="status"]').value = repair.status;
+        });
+        const deleteRepairBtn = document.createElement("button");
+        deleteRepairBtn.type = "button";
+        deleteRepairBtn.className = "btn-delete";
+        deleteRepairBtn.textContent = "🗑️ Delete";
+        deleteRepairBtn.addEventListener("click", () => {
+          if (!confirm(`Delete repair ticket ${repair.id}? This cannot be undone.`)) return;
+          const idx = state.repairs.findIndex((x) => x.id === repair.id);
+          if (idx !== -1) state.repairs.splice(idx, 1);
+          persist();
+          renderRepairs();
+          renderDashboard();
+          notify("Repair ticket deleted");
+        });
+        footer.append(editRepairBtn, deleteRepairBtn);
         card.append(top, device, customer, issue, footer);
         grid.append(card);
       });
@@ -834,9 +1012,9 @@
       const sales = state.sales.filter((sale) => sale.createdAt.startsWith(month));
       const repairs = state.repairs.filter((repair) => repair.createdAt.startsWith(month));
       const rows = [
-        ["Type", "Reference", "Date", "Description", "Customer", "Status/Payment", "Quantity", "Amount KSh"],
+        ["Type", "Reference", "Date", "Description", "Customer", "Status/Payment", "Quantity", "Amount KSh", "Tier"],
         ...sales.flatMap((sale) => sale.items.map((item) => [
-          "Sale", sale.id, sale.createdAt, item.name, "", sale.payment, item.quantity, item.quantity * item.unitPrice
+          "Sale", sale.id, sale.createdAt, item.name, "", sale.payment, item.quantity, item.quantity * item.unitPrice, sale.tier || ""
         ])),
         ...repairs.map((repair) => ["Repair", repair.id, repair.createdAt, `${repair.device}: ${repair.issue}`, repair.customer, repair.status, "", ""])
       ];
@@ -861,8 +1039,15 @@
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") document.querySelector("#modal-backdrop").classList.remove("open");
     });
+    document.querySelector("#toggle-all-sales").addEventListener("click", () => {
+      showAllSales = !showAllSales;
+      renderDashboard();
+    });
 
     const now = new Date();
+    const greetHour = now.getHours();
+    const greetWord = greetHour < 12 ? 'Good morning' : greetHour < 17 ? 'Good afternoon' : 'Good evening';
+    document.querySelector('#greeting-heading').textContent = greetWord + ', Naxcom';
     document.querySelector("#today").textContent = now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
     document.querySelector("#report-month").value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
     document.querySelectorAll("[data-page]").forEach((button) => button.addEventListener("click", () => {
